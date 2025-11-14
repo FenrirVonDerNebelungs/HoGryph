@@ -1,13 +1,13 @@
 #include "MathBase.h"
 #include "../Rotations/Quaternion.h"
+#ifndef TEST_H
+#include "../Test/Test.h"
+#endif
 
 float Math2D::Sin_And_Cos_To_Angle(const float& sin_ang, const float& cos_ang) {
 	float ang = acosf(cos_ang);/* returns value from 0 to pi */
-	if (sin_ang < 0.f) {
-		if (ang < PI_f)
-			ang += PI_f;
-		else
-			ang = 0.f;
+	if (sin_ang < 0.f && ang>0.f) {
+		ang = 2.f * PI_f - ang;
 	}
 	return ang;
 }
@@ -116,11 +116,13 @@ bool Vector::operator==(const Vector& other) const{
 	for (int i = 0; i < 3; i++)
 		if (this->m_vec[i] != other.m_vec[i])
 			return false;
+	return true;
 }
 bool Vector::operator!=(const Vector& other) {
 	for (int i = 0; i < 3; i++)
 		if (this->m_vec[i] != other.Get_i(i))
 			return true;
+	return false;
 }
 Vector& Vector::operator=(const Vector& rhs) {
 	_3Tuple::Equal(rhs);
@@ -194,6 +196,9 @@ Vector Matrix::operator*(const Vector& rhs) const {
 	Vector V_Mul = this->Mul(rhs);
 	return V_Mul;
 }
+Matrix Matrix::operator-(const Matrix& rhs) const {
+	return this->Sub(rhs);
+}
 void Matrix::Equal(const Matrix& other) {
 	for (int i = 0; i < 9; i++)
 		m_val[i] = other.GetValFromInteralIndex(i);
@@ -239,6 +244,14 @@ Matrix Matrix::Mul(const float& scalar) const {
 		multiplied_matrix.m_val[i] *= scalar;
 	return multiplied_matrix;
 }
+Matrix Matrix::Sub(const Matrix& other) const {
+	Matrix M_diff;
+	for (int i = 0; i < 9; i++) {
+		float a_term = this->m_val[i] - other.m_val[i];
+		M_diff.m_val[i] = a_term;
+	}
+	return M_diff;
+}
 float Matrix::Det() const {
 	Vector top_row = this->GetRow(0);
 	float det_sum = 0.f;
@@ -278,42 +291,16 @@ Matrix Matrix::Inverse() const {
 	Matrix inverse_M = cofactor_trans_M.Mul(1.f / det_M);
 	return inverse_M;
 }
-/*
-Vector Matrix::SolveLinearEquation(const Vector& B) const {
-	Vector V(B);
+
+Vector Matrix::GetEigenVector(const float& lambda) const{
 	Matrix M(*this);
-	for (int i = 0; i< 3; i++) {
-		float a_i0 = M.Get_ij(i, 0);
-		if (a_i0 != 0.f) {
-			M.MulRow(i, 1.f / a_i0);
-			if (i != 0) {
-				Switch_Extended_Rows(0, i, M, V);
-			}
-			if (a_i0 < 2) {
-				for (int ii = 1; ii < 3; ii++) {
-					float a_ii_0 = M.Get_ij(ii, 0);
-					if (a_ii_0 != 0.f) {
-						float elim_factor = -a_ii_0;
-						M.AddRows(0, elim_factor, a_ii_0);
-					}
-				}
-			}
-			break;
-		}
+	Matrix I;
+	for (int i = 0; i < 3; i++) {
+		I.Set_ij(i, i, lambda);
 	}
-	for (int i = 1; i < 3; i++) {
-		float a_i1 = M.Get_ij(i, 1);
-		if (a_i1 != 0.f) {
-			M.MulRow(i, 1.f / a_i1);
-			if (i != 1) {
-				Switch_Extended_Rows(1, i, M, V);
-			}
-		}
-
-	}
-
+	M = this->Sub(I);
+	return M.Solve_MX_equals_0(1.f);
 }
-*/
 float Matrix::Epsilon_ijk(const int& i, const int& j, const int& k) const{
 	if (i == j || i == k || j == k)
 		return 0.f;
@@ -383,7 +370,8 @@ void Matrix::AddRows(
 	const int& row_recieving_add_i
 ) {
 	Vector row_pulled = this->GetRow(row_pulled_to_add_i);
-	AddRow(row_pulled_to_add_i, row_pulled, row_pulled_multiple);
+	AddRow(row_recieving_add_i, row_pulled, row_pulled_multiple);
+	RoundToZero();
 }
 void Matrix::Switch_Rows(const int& row1_i, const int& row2_i) {
 	Vector switch_row = this->GetRow(row1_i);
@@ -403,4 +391,397 @@ void Matrix::MulRow(const int& i, const float& a) {
 	Vector row_i = this->GetRow(i);
 	Vector row_mult_i = row_i * a;
 	this->SetRow(i, row_mult_i);
+}
+
+Matrix Matrix::Put_M_In_UpperDiagonal_Form() {
+	Matrix Inv;
+	Inv.SetAsI();
+	/*
+	* u u u
+	* u u u
+	* u u u
+	*/
+	RoundToZero();
+	/***DEBUG***/
+	Test test;
+	test.ShowMatrix(*this);
+	/***********/
+	for (int i = 0; i < 3; i++) {
+		float a_i0 = Get_ij(i, 0);
+		if (a_i0 != 0.f) {
+			MulRow(i, 1.f / a_i0);
+			Inv.MulRow(i, 1.f / a_i0);
+			if (i != 0) {
+				Switch_Rows(0, i);
+				Inv.Switch_Rows(0, i);
+			}
+			/*
+			* 1 u u
+			* u u u
+			* u u u
+			*/
+			/***DEBUG***/
+			test.ShowMatrix(*this);
+			/***********/
+			for (int ii = 1; ii < 3; ii++) {
+				float a_ii_0 = Get_ij(ii, 0);
+				if (a_ii_0 != 0.f) {
+					float elim_factor = -a_ii_0;
+					AddRows(0, elim_factor, ii);
+					Inv.AddRows(0, elim_factor, ii);
+				}
+			}
+			/*
+			* 1 u u
+			* 0 u u
+			* 0 u u
+			*/
+			/***DEBUG***/
+			test.ShowMatrix(*this);
+			/***********/
+			break;
+		}
+	}
+	/*
+	*  1 u u      0 u u
+	*  0 u u  or  0 u u
+	*  0 u u      0 u u
+	*/
+	for (int i = 1; i < 3; i++) {
+		float a_i1 = Get_ij(i, 1);
+		if (a_i1 != 0.f) {
+			MulRow(i, 1.f / a_i1);
+			Inv.MulRow(i, 1.f / a_i1);
+			if (i != 1) {
+				Switch_Rows(1, i);
+				Inv.Switch_Rows(1, i);
+			}
+			/* u u u
+			*  0 1 u
+			*  0 u u
+			*/
+			/***DEBUG***/
+			test.ShowMatrix(*this);
+			/***********/
+			float a_21 = Get_ij(2, 1);
+			if (a_21 != 0.f) {
+				float elim_factor = -a_21;
+				AddRows(1, elim_factor, 2);
+				Inv.AddRows(1, elim_factor, 2);
+			}
+			break;
+		}
+		/*
+		*   u u u
+		*   0 1 u
+		*   0 0 u
+		*/
+		/***DEBUG***/
+		test.ShowMatrix(*this);
+		/***********/
+	}
+	/*
+	*  0 u u   0 u u   1 u u  1 u u
+	*  0 0 u   0 1 u   0 0 u  0 1 u
+	*  0 0 u   0 0 u   0 0 u  0 0 u
+	*/
+	/***DEBUG***/
+	test.ShowMatrix(*this);
+	/***********/
+	float a_2z = Get_ij(2, 2);
+	if (a_2z != 0.f) {
+		MulRow(2, 1.f / a_2z);
+		Inv.MulRow(2, 1.f / a_2z);
+	}
+	/*
+	*  0 u u   0 u u   1 u u  1 u u     0 u u   0 u u   1 u u  1 u u
+	*  0 0 u   0 1 u   0 0 u  0 1 u     0 0 u   0 1 u   0 0 u  0 1 u
+	*  0 0 0   0 0 0   0 0 0  0 0 0     0 0 1   0 0 1   0 0 1  0 0 1
+	*/
+	/*matrix is now upper diagonal after operations above*/
+	/***DEBUG***/
+	test.ShowMatrix(*this);
+	/***********/
+	return Inv;
+}
+bool Matrix::Simplify_UpperDiagonal_Form(Matrix& Inv) {
+	/***DEBUG***/
+	Test test;
+	test.ShowMatrix(*this);
+	/**********/
+	float a_2z = Get_ij(2, 2);
+	if (a_2z != 0.f) {
+		/*use this row to clear out all the z terms*/
+		for (int i = 0; i < 2; i++) {
+			float a_i2 = Get_ij(i, 2);
+			if (a_i2 != 0.f) {
+				float elim_factor = -a_i2;
+				AddRows(2, elim_factor, i);
+				Inv.AddRows(2, elim_factor, i);
+			}
+		}
+	}
+	/***DEBUG***/
+	test.ShowMatrix(*this);
+	/**********/
+	float a_1y = Get_ij(1, 1);
+	if (a_1y != 0.f) {
+		/*use this row to clear upper y terms*/
+		int i = 0;
+		float a_i1 = Get_ij(i, 1);
+		if (a_i1 != 0.f) {
+			float elim_factor = -a_i1;
+			AddRows(1, elim_factor, i);
+			Inv.AddRows(1, elim_factor, i);
+		}
+	}
+	/***DEBUG***/
+	test.ShowMatrix(*this);
+	/**********/
+	/*
+	*  0 u u   0 0 u   1 u u  1 0 u     0 u 0   0 0 0   1 u 0  1 0 0
+	*  0 0 u   0 1 u   0 0 u  0 1 u     0 0 0   0 1 0   0 0 0  0 1 0
+	*  0 0 0   0 0 0   0 0 0  0 0 0     0 0 1   0 0 1   0 0 1  0 0 1
+	*/
+	float a_0x = Get_ij(0, 0);
+	if (a_0x == 0.f) {
+		a_1y = Get_ij(1, 1);
+		if (a_1y != 0.f) {
+			Switch_Rows(0, 1);
+			Inv.Switch_Rows(0, 1);
+		}
+	}
+	/***DEBUG***/
+	test.ShowMatrix(*this);
+	/**********/
+	/*
+	*  0 u u   0 1 u   1 u u  1 0 u     0 u 0   0 1 0   1 u 0  1 0 0
+	*  0 0 u   0 0 u   0 0 u  0 1 u     0 0 0   0 0 0   0 0 0  0 1 0
+	*  0 0 0   0 0 0   0 0 0  0 0 0     0 0 1   0 0 1   0 0 1  0 0 1
+	*/
+	a_1y = Get_ij(1, 1);
+	if (a_1y == 0.f) {
+		a_2z = Get_ij(2, 2);
+		if (a_2z != 0.f) {
+			Switch_Rows(1, 2);
+			Inv.Switch_Rows(1, 2);
+		}
+	}
+	/***DEBUG***/
+	test.ShowMatrix(*this);
+	/**********/
+	/*
+	*  0 u u   0 1 u   1 u u  1 0 u     0 u 0   0 1 0   1 u 0  1 0 0
+	*  0 0 u   0 0 u   0 0 u  0 1 u     0 0 1   0 0 1   0 0 1  0 1 0
+	*  0 0 0   0 0 0   0 0 0  0 0 0     0 0 0   0 0 0   0 0 0  0 0 1
+	*/
+	/*find lead index in top row*/
+	int top_lead_j_index = -1;
+	float top_lead_term = 0.f;
+	for (int j = 0; j < 3; j++) {
+		if (Get_ij(0, j) != 0.f) {
+			top_lead_j_index = j;
+			top_lead_term = Get_ij(0, j);
+			break;
+		}
+	}
+	if (top_lead_j_index < 0)
+		return false; /*all zero matrix, so return null point vector * /
+	if (top_lead_term != 1.f)
+		MulRow(0, (1.f / top_lead_term));
+	/*
+	*  0 1 u   0 1 u   1 u u  1 0 u     0 1 0   0 1 0   1 u 0  1 0 0
+	*  0 0 u   0 0 u   0 0 u  0 1 u     0 0 1   0 0 1   0 0 1  0 1 0
+	*  0 0 0   0 0 0   0 0 0  0 0 0     0 0 0   0 0 0   0 0 0  0 0 1
+	*/
+
+	for (int j = 0; j < 3; j++) {
+		if (Get_ij(1, j) != 0.f) {
+			top_lead_j_index = j;
+			top_lead_term = Get_ij(1, j);
+			break;
+		}
+	}
+	if (top_lead_j_index < 0)
+		return false;/* all rows but 1 of the matrix are zero, at best this is the equation of a plane */
+	if (top_lead_j_index == 2) { /* if of 1st nonzero term is two the ij = 22 term will already be set with top/bottom cleared*/
+		/*only need to fix matrix if the first term is in the third positon (for the second line)*/
+		MulRow(1, (1.f / top_lead_term));
+		Inv.MulRow(1, (1.f / top_lead_term));
+		int i = 0;
+		float a_i2 = Get_ij(i, 2);
+		float elim_factor = -a_i2;
+		AddRows(1, elim_factor, i);
+		Inv.AddRows(1, elim_factor, i);
+	}
+	/*
+	*  0 1 0   0 1 0   1 u 0  1 0 u     0 1 0   0 1 0   1 u 0   1 0 0
+	*  0 0 1   0 0 1   0 0 1  0 1 u     0 0 1   0 0 1   0 0 1   0 1 0
+	*  0 0 0   0 0 0   0 0 0  0 0 0     0 0 0   0 0 0   0 0 0   0 0 1
+	*/
+	/***DEBUG***/
+	test.ShowMatrix(*this);
+	test.ShowMatrix(Inv);
+	/**********/
+	return true;
+}
+Vector Matrix::Solve_MX_equals_0(const float& vec_len) {
+	Vector X;
+	X.Set_Scalar(-2.f);
+	Matrix InverseM = Put_M_In_UpperDiagonal_Form();
+	if (!Simplify_UpperDiagonal_Form(InverseM))
+		return X;
+	float a_2z = Get_ij(2, 2);
+	a_2z = Get_ij(2, 2);
+	if (a_2z != 0.f)
+		/*solve
+		* 1 0 0
+		* 0 1 0
+		* 0 0 1
+		*/
+		return X; /* equation of point not vector */
+
+	float a_1y = Get_ij(1, 1);
+	float a_1z = Get_ij(1, 2);
+	if (a_1y == 0.f) {
+		/*solve
+		*  0 1 0   0 1 0   1 u 0            0 1 0   0 1 0   1 u 0
+		*  0 0 1   0 0 1   0 0 1            0 0 1   0 0 1   0 0 1
+		*  0 0 0   0 0 0   0 0 0            0 0 0   0 0 0   0 0 0
+		*/
+		/*already returned X when all of this line was zero, so a_1z will be nonzero*/
+		X.Set_i(2, 0.f); /* z = 0 */
+		/*solve top line */
+		float a_0x = Get_ij(0, 0);
+		if (a_0x == 0.f) {
+			/*solve*
+			* 0 1 0   0 1 0                    0 1 0   0 1 0
+			* 0 0 1   0 0 1                    0 0 1   0 0 1
+			* 0 0 0   0 0 0                    0 0 0   0 0 0
+			*/
+			X.Set_i(1, 0.f); /* y=0 */
+			X.Set_i(0, 1.f); /* all X along line solve this equation*/
+		}
+		else { /* a_1y=0, a_0x=1 */
+			/* solve
+			*                  1 u 0                            1 u 0
+			*                  0 0 1                            0 0 1
+			*                  0 0 0                            0 0 0
+			*/
+			/* cx.. = 0 */
+			/*remaining equation will give x in terms of y, or set x to 0*/
+			float a_0y = Get_ij(0, 1);
+			if (a_0y == 0.f) {
+				X.Set_i(0, 0.f);/* x = 0 */
+				X.Set_i(1, 1.f); /* line along Y solves this equation */
+			}
+			else {
+				/* cx+by = 0 */
+				/* (a_0x)x + (a_0y)y = 0 */
+				/* x/y=-(a_0y)/(a_0x)   */
+				float slope = -a_0y / a_0x;
+				X.Set_i(1, 1.f);
+				X.Set_i(0, slope);
+			}
+		}
+	}
+	else {
+		/*solve
+		*                         1 0 u
+		*                         0 1 u
+		*                         0 0 0
+		*/
+		/* a_1y != 0 2nd line has form (a_1y)y + ... = 0*/
+		/* use 2nd line first to find y vs z, or value of y */
+		if (a_1z == 0.f) {
+			/* solve
+			*  1 0 u
+			*  0 1 0
+			*  0 0 0
+			*/
+			/* (a_1y)y + 0z=0 */
+			/* y=0 */
+			X.Set_i(1, 0.f);
+			/*now use top line to find X...*/
+			float a_0z = Get_ij(0, 2);
+			if (a_0z == 0.f) {
+				/* solve
+				* 1 0 0
+				* 0 1 0
+				* 0 0 0
+				*/
+				/* x + 0z= 0 */
+				/* x = 0 */
+				X.Set_i(0, 0.f);
+				X.Set_i(2, 1.f); /* line along Z solves Y=0, X=0 */
+			}
+			else {
+				/* solve
+				*  1 0 n
+				*  0 1 0
+				*  0 0 0
+				*/
+				/* x + (a_0z)z = 0 */
+				/* x/z = -(a_0z)   */
+				float slope = -a_0z;
+				X.Set_i(2, 1.f);
+				X.Set_i(0, slope); /* line in y=0 plane with slope=x/z = -a_0z */
+			}
+		}
+		else {
+			/*solve
+			* 1 0 u
+			* 0 1 n
+			* 0 0 0
+			*/
+			/* a_1y !=0 and a_1z!=0 2nd line has the form y + (a_1z)z = 0*/
+			/* y/z = -(a_1z) */
+			float slope_y_over_z = -a_1z;
+			X.Set_i(2, 1.f);
+			X.Set_i(1, slope_y_over_z);
+			/*now use top line to find x*/
+			/* a_0x=1 and a_0y==0 when a_1y!=0 due to the constructon of the matrixes */
+			float a_0z = Get_ij(0, 2);
+			if (a_0z == 0.f) {
+				/* solve
+				* 1 0 0
+				* 0 1 n
+				* 0 0 0
+				*/
+				/* x + 0z = 0 */
+				/* x=0 */
+				X.Set_i(0, 0.f);
+			}
+			else {
+				/* solve
+				* 1 0 n
+				* 0 1 n
+				* 0 0 0
+				*/
+				/* x + (a_0z)z = 0 */
+				/* x/z = -(a_0z) */
+				float slope = -a_0z;
+				X.Set_i(0, slope);/* line through space defined by lines in the yz and xz planes */
+			}
+		}
+	}
+	float X_len = X.Vector_Length();
+	if (X_len <= 0.f)
+		return X;
+	float X_len_scale_factor = vec_len / X_len;
+	Vector X_unit = X * X_len_scale_factor;
+	return X_unit;
+}
+void Matrix::SetAsI() {
+	for (int i = 0; i < 3; i++)
+		Set_ij(i, i, 1.f);
+}
+void Matrix::RoundToZero() {
+	for (int i = 0; i < 9; i++) {
+		if (fabsf(m_val[i]) < matrix_op_zero_round_value) {
+			if(m_val[i]!=0.f)
+				std::cout << "\n matrix value: " << m_val[i] << " set to zero.\n";
+			m_val[i] = 0.f;
+		}
+	}
 }

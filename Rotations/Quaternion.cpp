@@ -23,6 +23,11 @@ Quaternion& Quaternion::operator* (const Quaternion& rhs) {
 	this->Equal(multiplicaton_result);
 	return *this;
 }
+Quaternion Quaternion::operator+ (const Quaternion& rhs) const{
+	Quaternion sum = this->Add(rhs);
+	sum.Set_Scalar(this->m_scalar + rhs.m_scalar);
+	return sum;
+}
 void Quaternion::Equal(const Quaternion& other) {
 	_3Tuple::Equal(other);
 }
@@ -31,6 +36,24 @@ void Quaternion::Inv() {
 		this->m_vec[i] = -(this->m_vec[i]);
 }
 Quaternion Quaternion::Mul(const Quaternion& other) const {
+	/* q1 q2  
+	* (q1_s + q1_vec)(q2_s + q2_vec)
+	* q1_s * q2_s + q1_s(q2_vec) + (q1_vec)q2_s + (q1_vec)(q2_vec)
+	* q1_s * q2_s + q1_s(q2_vec) + q2_s(q1_vec) + (q1_vec)(q2_vec)
+	*/
+	/* q1_s*q2_s */
+	Quaternion term1(0.f, 0.f, 0.f, this->m_scalar * other.m_scalar);
+	/*q1_s(q2_vec)*/
+	Quaternion term2 = VectorPartOnly(other);
+	term2.Mul_Vector_Part(this->m_scalar);
+	/*q2_s(q1_vec)*/
+	Quaternion term3 = VectorPartOnly(*this);
+	term3.Mul_Vector_Part(other.m_scalar);
+	/*(q1_vec)(q2_vec)*/
+	Quaternion term4 = this->MulVectorParts(other);
+	return term1 + term2 + term3 + term4;
+}
+Quaternion Quaternion::MulVectorParts(const Quaternion& other) const{
 	Quaternion multiplied_quat;
 	Quaternion_component all_multipication_terms[9];
 	int cnt_multiplication_terms = 0;
@@ -43,12 +66,13 @@ Quaternion Quaternion::Mul(const Quaternion& other) const {
 			other_term.i = i_other;
 			other_term.val = other.Get_i(i_other);
 			all_multipication_terms[cnt_multiplication_terms] = component_multiplication(this_term, other_term);
+			cnt_multiplication_terms++;
 		}
 	}
 	/*add the scalar part*/
 	float scalar_value = 0.f;
 	for (int i = 0; i < 9; i++) {
-		if (all_multipication_terms[i].i == 3)
+		if (all_multipication_terms[i].i == 3 /*3 is coded as beyond the highest index, and indicate a scalar*/)
 			scalar_value += all_multipication_terms[i].val;
 	}
 	multiplied_quat.Set_Scalar(scalar_value);
@@ -96,10 +120,11 @@ int Quaternion::component_index_multiplication(int this_component_index, int oth
 	if (this_component_index == other_component_index)
 		return 0;
 	int sign = 1;
-	if (other_component_index < this_component_index) {
-		if (std::abs(other_component_index - this_component_index) < 2)
-			sign = -1;
-	}
+	if (other_component_index < this_component_index) 
+		sign *= -1;
+	if (std::abs(other_component_index - this_component_index) >= 2)
+		sign *= -1;
+	
 	int available_component_indexes[] = { 1, 2, 3 };
 	for (int i = 0; i < 3; i++) {
 		if (other_component_index == available_component_indexes[i] || this_component_index == available_component_indexes[i])
@@ -118,6 +143,11 @@ void Quaternion::add_component_to_this_quaternion(const Quaternion_component& va
 		return;
 	this->m_vec[val.i] += val.val;
 }
+Quaternion Quaternion::VectorPartOnly(const Quaternion& q) const{
+	Quaternion vec(q);
+	vec.Set_Scalar(0.f);
+	return vec;
+}
 
 Quaternion_Rotation::Quaternion_Rotation() {
 	;
@@ -130,6 +160,19 @@ Quaternion Quaternion_Rotation::GetRotationQuaternion(const Axis_Angle& Ang_N_Ve
 	float a = Ang_N_Vec.Get_Scalar();
 	u.Set_Scalar(0.f);
 	return rotationQuaternion(a, u);
+}
+Axis_Angle Quaternion_Rotation::GetRotationAxis(const Quaternion& q) const {
+	Axis_Angle ang_vec;
+	float half_angle = acosf(q.Get_Scalar());
+	ang_vec.Set_Scalar(half_angle * 2.f);
+	Vector vector_part(q);
+	float vector_part_magnitude = q.Vector_Length();
+	Vector unit_vector_part;
+	if (vector_part_magnitude >= 0) {
+		unit_vector_part = vector_part.Mul(1.f / vector_part_magnitude);
+	}
+	ang_vec.Set(unit_vector_part.Get_i(0), unit_vector_part.Get_i(1), unit_vector_part.Get_i(2));
+	return ang_vec;
 }
 Matrix Quaternion_Rotation::GetRotationMatrix(const Quaternion& q) const {
 	Axis_Angle u_ang = GetRotationAxis(q);
@@ -161,18 +204,7 @@ Quaternion Quaternion_Rotation::CombineRotation(const Quaternion& q1, const Quat
 	return q_rot;
 }
 
-Axis_Angle Quaternion_Rotation::GetRotationAxis(const Quaternion& q) const {
-	Axis_Angle ang_vec;
-	float two_angle = acosf(q.Get_Scalar());
-	ang_vec.Set_Scalar(two_angle / 2.f);
-	Vector vector_part(q);
-	float vector_part_magnitude = q.Vector_Length();
-	if (vector_part_magnitude >= 0) {
-		vector_part.Mul(1.f / vector_part_magnitude);
-	}
-	ang_vec.Set(vector_part.Get_i(0), vector_part.Get_i(1), vector_part.Get_i(2));
-	return ang_vec;
-}
+
 Quaternion Quaternion_Rotation::GetRotation(const Matrix& R) const {
 	AxisRotation Axis_Rotar;
 

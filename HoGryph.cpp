@@ -2,11 +2,14 @@
 //
 
 /*homography transformations, to be setup as a python extension later*/
-#include <iostream>
+#include "Test/Test.h"
 
 int main()
 {
     std::cout << "Hello World!\n";
+    Test test_master;
+    test_master.RunTests();
+    return 0;
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu

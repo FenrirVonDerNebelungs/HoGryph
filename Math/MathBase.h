@@ -4,7 +4,8 @@
 
 #ifndef MATHBASE_H
 #define MATHBASE_H
-const float PI_f = 2.f * sinf(1.f);
+const float PI_f = 2.f * asinf(1.f);
+const float matrix_op_zero_round_value = 0.000001f;
 
 class Quaternion;
 
@@ -86,6 +87,7 @@ public:
 	Matrix& operator=(const Matrix& rhs);
 	Matrix operator*(const Matrix& rhs) const;
 	Vector operator*(const Vector& rhs) const;
+	Matrix operator-(const Matrix& rhs) const;
 	void Equal(const Matrix& other);
 
 	inline float Get_ij(int i, int j) const { int indx = i + j * 3; return m_val[indx]; }
@@ -95,14 +97,17 @@ public:
 	Matrix Mul(const Matrix& other) const;
 	Vector Mul(const Vector& other) const;
 	Matrix Mul(const float& scalar) const;
+	Matrix Sub(const Matrix& other) const;
 
 	float Det() const; /* determinate of matrix */
 	Matrix CofactorMatrix() const;
 	Matrix Transpose() const;
 	Matrix Inverse() const;
 
-	/*Vector SolveLinearEquation(const Vector& B) const;*/ /*finds X from MX=B*/
 
+	Vector GetEigenVector(const float& lambda) const;/*if lambda is the eigenvalue,
+													    if method fails it return a null, all zero, vector. 
+														Method is exteremely sensitive to rounding errors, does not return the correct value for all matrixes.*/
 	inline float GetValFromInteralIndex(int i) const { return m_val[i]; }
 protected:
 	float m_val[9];
@@ -118,5 +123,11 @@ protected:
 		Matrix& M,
 		Vector& V) const;
 	void MulRow(const int& i, const float& a);/*multiply row i by a*/
+	Matrix Put_M_In_UpperDiagonal_Form();
+	bool Simplify_UpperDiagonal_Form(Matrix& Inv);/*true if matrix can produce an eigenvector/ false if degnerate to 3d space or a plane*/
+	Vector Solve_MX_equals_0(const float& vec_len=1.f); /*finds X from MX=0, not completelly accurate. The zero equivalent for this method to
+														  fix rounding errors is set to < 0.001*/
+	void SetAsI();
+	void RoundToZero();/* set terms that are aproximately zero to zero*/
 };
 #endif

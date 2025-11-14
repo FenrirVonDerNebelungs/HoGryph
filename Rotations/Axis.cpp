@@ -48,7 +48,10 @@ Axis_Angle AxisRotation::GetFlatRotationAxis(
 		Null_Axis.Normalize();
 		return Null_Axis;
 	}
-	float angle = asinf(V_axis_len / (v_len * v_new_len));
+	float v_mul_len = v_len * v_new_len;
+	float sin_term = V_axis_len/v_mul_len;
+	float cos_term = v.Dot(v_new)/v_mul_len;
+	float angle = Math2D::Sin_And_Cos_To_Angle(sin_term, cos_term);
 	Axis_Angle AngNVec(V_axis);
 	AngNVec.SetAngle(angle);
 	return AngNVec;
@@ -97,12 +100,57 @@ void AxisRotation::GetAxesFromRotation(
 }
 Matrix AxisRotation::GetRotationMatrix(const Axis_Angle& u_ang) const {
 	Vector X_axis(1.f, 0.f, 0.f);
-	Rotate(u_ang, X_axis);
+	Vector X_axis_new = Rotate(u_ang, X_axis);
 	Vector Y_axis(0.f, 1.f, 0.f);
-	Rotate(u_ang, Y_axis);
+	Vector Y_axis_new = Rotate(u_ang, Y_axis);
 	Vector Z_axis(0.f, 0.f, 1.f);
-	Rotate(u_ang, Z_axis);
-	return GetRotationMatrix(X_axis, Y_axis, Z_axis);
+	Vector Z_axis_new = Rotate(u_ang, Z_axis);
+	return GetRotationMatrix(X_axis_new, Y_axis_new, Z_axis_new);
+}
+Axis_Angle AxisRotation::GetRotation(const Matrix& M_Rot)const {
+	/* if a vector is colinear with the rotation axis it will be invariant under multiplication by M_Rot 
+	*  the rotation axis is an eigenvector with eigenvalue 1 of M_Rot
+	*/
+	float angle = 0.f;
+	Vector rotation_axis = M_Rot.GetEigenVector(1.f);
+	if (rotation_axis.Vector_Length() > 0.99f) {
+		Vector X(1.f, 0.f, 0.f);
+		Vector Y(0.f, 1.f, 0.f);
+		Vector Z(0.f, 0.f, 1.f);
+		Vector rot_X;
+		Vector rot_Y;
+		Vector rot_Z;
+		GetAxesFromRotation(M_Rot, rot_X, rot_Y, rot_Z);
+		if (rotation_axis.Dot(rot_X) < 0.95f) {
+			angle = GetRotationAngle(rotation_axis, X, rot_X);
+		}
+		else if (rotation_axis.Dot(rot_Y) < 0.95f) {
+			angle = GetRotationAngle(rotation_axis, Y, rot_Y);
+		}
+	}
+	Axis_Angle rotation_axis_angle(rotation_axis);
+	rotation_axis_angle.SetAngle(angle);
+	return rotation_axis_angle;
+}
+float AxisRotation::GetRotationAngle(
+	const Vector& rotation_axis,
+	const Vector& v,
+	const Vector& v_new
+) const {
+	Vector u_perp = v.Cross(rotation_axis);
+	u_perp.Normalize();
+	Vector u_new_perp = v_new.Cross(rotation_axis);
+	u_new_perp.Normalize();
+	/* a X b =|a||b|sin(theta)
+	*  a * b = |a||b| cos(theta)
+	*/
+	Vector sin_term_vec = u_perp.Cross(u_new_perp);
+	float sin_term = sin_term_vec.Vector_Length();
+	if (sin_term_vec.Dot(rotation_axis) < 0.f)
+		sin_term *= -1.f;
+	float cos_term = u_perp.Dot(u_new_perp);
+	float rot_angle = Math2D::Sin_And_Cos_To_Angle(sin_term, cos_term);
+	return rot_angle;
 }
 /*
 Axis_Angle AxisRotation::GetAxisRotationFromMatrix(Matrix& M_Rot) const{

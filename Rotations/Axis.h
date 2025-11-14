@@ -30,6 +30,7 @@ public:
 		const Vector& v,
 		const Vector& v_new
 	) const;
+
 	virtual Vector Rotate(
 		const Axis_Angle& rotation_about_axis,
 		const Vector& v
@@ -54,6 +55,15 @@ public:
 		u_ang_inv.Set_Scalar(- u_ang.Get_Scalar());
 		return GetRotationMatrix(u_ang_inv);
 	}
+	Axis_Angle GetRotation(const Matrix& M_Rot) const;/* Unreliable, does not return the correct value for all matrixes. 
+	                                                   This method attempts to find the rotation axis by finding the eigenvector of the rotation matrix.
+													   The solution to the eigenvector problem is numerically unstable as it relies on exact cancellation.
+													   There may also be bugs not caused by rounding errors.
+													   */
+	float GetRotationAngle(
+		const Vector& rotation_axis,
+		const Vector& v,
+		const Vector& v_new) const;
 protected:
 };
 #endif

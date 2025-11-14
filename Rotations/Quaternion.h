@@ -20,6 +20,7 @@ public:
 	~Quaternion();
 
 	Quaternion& operator* (const Quaternion& rhs);
+	Quaternion operator+ (const Quaternion& rhs) const;
 	void Equal(const Quaternion& other);
 	void Inv();/*invert this quaternion*/
 
@@ -28,12 +29,12 @@ public:
 
 	void Normalize();/*sets this quaternion's scalar to 0 and vector to 1*/
 protected:
+	Quaternion MulVectorParts(const Quaternion& other) const; /*ignores scalar values for this & other */
 	Quaternion_component component_multiplication(const Quaternion_component& this_component, const Quaternion_component& other_component) const;/*indexes are from 0 to 2*/
 	int component_index_multiplication(int this_component_index, int other_component_index) const;  /*indexes need to start at 1 and go to 3*/
 
 	void add_component_to_this_quaternion(const Quaternion_component& val);
-
-
+	Quaternion VectorPartOnly(const Quaternion& q) const;
 };
 
 class Quaternion_Rotation : public AxisRotation {
@@ -43,6 +44,11 @@ public:
 
 
 	Quaternion GetRotationQuaternion(const Axis_Angle& rotation_about_axis) const;
+	Axis_Angle GetRotationAxis(const Quaternion& q) const; /*the input is a quaternion used to defne a rotation in form
+		   cos(alpha/2) + \vec{u} * sin(alpha/2)
+		   the output is a unit vector which corresponds to the rotation axis
+		   and a scalar which is the angle */
+
 	Matrix GetRotationMatrix(const Quaternion& q) const;
 	Matrix GetInvRotationMatrix(const Quaternion& q) const { Quaternion q_inv = q; q_inv.Inv(); return GetRotationMatrix(q_inv); }
 
@@ -65,10 +71,6 @@ public:
 		const Quaternion& q3
 	) const;
 
-	Axis_Angle GetRotationAxis (const Quaternion& q) const; /*the input is a quaternion used to defne a rotation in form
-			   cos(alpha/2) + \vec{u} * sin(alpha/2) 
-			   the output is a unit vector which corresponds to the rotation axis
-			   and a scalar which is the angle */
 	Quaternion GetRotation(const Matrix& R) const; /* if R is a rotation matrix then this 
 													return the quaternion rotation operator 
 													that is equivalent to rotation by this matrix */
